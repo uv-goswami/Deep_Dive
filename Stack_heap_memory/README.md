@@ -17,7 +17,7 @@ To visualize this, imagine your RAM divided into two primary zones: the **Stack*
 2. `p1` sits on the stack and has an arrow pointing to `local_val` (also on the stack).
 3. `p2` sits on the stack, but its arrow crosses over into the **Heap** to point at the value `20`.
 
-![01_01_memory_basics_stack_heap](Diagrams\01_01_memory_basics_stack_heap.png)
+![01_01_memory_basics_stack_heap](https://github.com/uv-goswami/Deep_Dive/blob/e96c6dd467021c85e018e4f27788df345c71d82e/Diagrams/01_01_memory_basics_stack_heap.png)
 
 ---
 

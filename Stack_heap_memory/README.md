@@ -63,7 +63,7 @@ Those 8 bytes are located on the **Stack**. A pointer is just a variable that ho
 
 ---
 
-### Answers to Your Questions
+### Questions
 
 **1. Does arr have an arrow? (Does arr store a memory address like p does?)**
 **No.** This is the "Lie." Unlike the pointer `p`, `arr` is not a separate variable that holds an address. It is a label for a specific block of memory. When you use `arr`, the compiler substituted the address of the first element, but there is no "pointer variable" for `arr` taking up space on the stack.
@@ -79,3 +79,120 @@ The value stored in `p` is **0x1000**. When you execute `int* p = arr;`, the arr
 
 ---
 ---
+<br>
+
+## 01_03_memory_dangling
+
+```cpp
+void main() {
+    int* p2 = new int(20); // 0x500
+    int* p3 = p2;          // 0x500
+    
+    delete p2;   // Memory at 0x500 is freed
+    p2 = nullptr; // p2 is now safe
+
+    *p3 = 50;    // CRASH: p3 is dangling
+}
+
+```
+
+
+### Memory Diagram (Post-Line B)
+
+| Memory Zone | Contents | State |
+| --- | --- | --- |
+| **Stack** | `p2` | `nullptr` (0x0) |
+| **Stack** | `p3` | `0x500` (The Dangling Pointer) |
+| **Heap** | `0x500` | **FREED / INVALID** |
+
+---
+
+
+### **Step-by-Step Visualization**
+
+Draw this exactly in your notebook. We will trace the memory change line by line.
+
+#### **Step 1: Initialization**
+
+```cpp
+int* p2 = new int(20);
+int* p3 = p2;
+
+```
+
+**Status:** Both pointers hold the address `0x500`. The Heap at `0x500` is valid (owned by you).
+
+![01_03_1_memory_dangling](Diagrams/01_03_1_memory_dangling.svg)
+
+---
+
+#### **Step 2: The `delete` Command**
+
+```cpp
+delete p2;  // <--- LINE A
+
+```
+
+**Status:**
+
+* **Stack:** `p2` **STILL** holds `0x500`. It did not change.
+* **Stack:** `p3` **STILL** holds `0x500`. It did not change.
+* **Heap:** The block at `0x500` is now **DEAD** (Freed).
+
+**CRITICAL:** `p2` is now a "Dangling Pointer". It points to memory that is no longer yours.
+
+![01_03_2_memory_dangling](01_03_2_memory_dangling.svg)
+
+---
+
+#### **Step 3: The Safety Measure**
+
+```cpp
+p2 = nullptr; // <--- LINE B
+
+```
+
+**Status:**
+
+* **Stack:** `p2` is now `0` (Safe). If you try to use `p2`, it will crash cleanly (Segfault on NULL).
+* **Stack:** `p3` **STILL** holds `0x500`. `p3` did not get the memo. It is still pointing to the dead body.
+
+![01_03_3_memory_dangling]()
+
+---
+
+#### **Step 4: The Crash (Use After Free)**
+
+```cpp
+*p3 = 50; // <--- LINE C
+
+```
+
+**Why it crashes:**
+
+1. The CPU reads the value inside `p3` (`0x500`).
+2. It goes to memory address `0x500`.
+3. The Memory Manager says: **"HEY! You told me I could have this back! You don't own this anymore!"**
+4. **Result:** Segmentation Fault (Crash) or, worse, you overwrite memory that the OS just gave to a completely different part of your program (Heap Corruption).
+
+---
+**Q1: After LINE A runs, look at p2 on the Stack. Does the box p2 physically change?**
+No, the box `p2` does **not** physically change. It still holds the address `0x500`. `delete` only tells the Heap Manager that the memory at that address is no longer in use; it does not "wipe" the pointer variable on the stack.
+
+**Q2: After LINE A runs, look at the Heap address 0x500. What is there now?**
+The value `20` might still be there physically, but logically, it is **Deallocated/Junk**. The Heap Manager marks that block as "Free," meaning it can be overwritten by any other part of the program at any moment.
+
+**Q3: LINE C will crash the program. Why?**
+Line C crashes (or causes undefined behavior) because **p3** is a **dangling pointer**. While `p2` was safely set to `nullptr` in Line B, `p3` still holds the address `0x500`. When you attempt to assign `50` to `*p3`, you are trying to write to a memory location that is no longer **valid** for your use.
+
+---
+
+### Key Takeaways
+
+* **Delete vs. Null:** `delete` affects the **Heap**; `nullptr` affects the **Stack**.
+* **The Alias Trap:** Setting one pointer to `nullptr` does nothing to other pointers (`p3`) that were copied from it.
+* **Safety Rule:** Always be aware of "aliases" (multiple pointers to the same memory). If you delete the memory, all aliases become dangerous.
+
+---
+---
+<br>

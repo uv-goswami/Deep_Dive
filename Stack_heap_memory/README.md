@@ -23,7 +23,7 @@ To visualize this, imagine your RAM divided into two primary zones: the **Stack*
 2. `p1` sits on the stack and has an arrow pointing to `local_val` (also on the stack).
 3. `p2` sits on the stack, but its arrow crosses over into the **Heap** to point at the value `20`.
 
-![01_01_memory_basics_stack_heap](/Diagrams/01_01_memory_basics_stack_heap.png)
+![01_01_memory_basics_stack_heap](/assets/diagrams/01_01_memory_basics_stack_heap.png)
 ---
 
 ### Questions
@@ -65,7 +65,7 @@ void tricky_arrays(){
 * `p` occupies **1 box** (8 bytes on a 64-bit system).
 * **Crucial Insight:** `arr` does **not** have an arrow. `arr` *is* the boxes. It doesn't "store" the address `0x1000` in a separate variable; it simply starts at that location.
 
-![01_02_arrays_and_decay](/Diagrams/01_02_arrays_and_decay.svg)
+![01_02_arrays_and_decay](/assets/assets/diagrams/01_02_arrays_and_decay.svg)
 
 ---
 
@@ -127,7 +127,7 @@ int* p3 = p2;
 **Status:** Both pointers hold the address `0x500`. The Heap at `0x500` is valid (owned by you).
 
 
-![01_03_1_memory_dangling](/Diagrams/01_03_1_memory_dangling.svg)
+![01_03_1_memory_dangling](/assets/diagrams/01_03_1_memory_dangling.svg)
 
 ---
 
@@ -146,7 +146,7 @@ delete p2;  // <--- LINE A
 
 **CRITICAL:** `p2` is now a "Dangling Pointer". It points to memory that is no longer yours.
 
-![01_03_2_memory_dangling](/Diagrams/01_03_2_memory_dangling.svg)
+![01_03_2_memory_dangling](/assets/diagrams/01_03_2_memory_dangling.svg)
 
 ---
 
@@ -162,7 +162,7 @@ p2 = nullptr; // <--- LINE B
 * **Stack:** `p2` is now `0` (Safe). If you try to use `p2`, it will crash cleanly (Segfault on NULL).
 * **Stack:** `p3` **STILL** holds `0x500`. `p3` did not get the memo. It is still pointing to the dead body.
 
-![01_03_3_memory_dangling](/Diagrams/01_03_3_memory_dangling.svg)
+![01_03_3_memory_dangling](/assets/diagrams/01_03_3_memory_dangling.svg)
 ---
 
 #### **Step 4: The Crash (Use After Free)**
@@ -200,3 +200,95 @@ Line C crashes (or causes undefined behavior) because **p3** is a **dangling poi
 ---
 ---
 <br>
+
+```
+## 01_03_stack_recursion
+
+def recursive(n):
+    data = 10   #Local Variable
+
+    recursive(n+1)
+
+recursive(1)
+```
+
+**Verdict: CORRECT.**
+You have successfully predicted the physical behavior of the Stack. The "Stack" isn't just a concept; it is a physical region of RAM that fills up like a bucket.
+
+Here is the exact visualization you requested, formatted strictly.
+
+---
+
+## 01_03_stack_recursion
+
+```python
+def recursive(n):
+    data = 10  # Local variable
+    # STOP HERE
+    recursive(n + 1)
+
+recursive(1)
+
+```
+
+### Memory Diagram (At `n=3`)
+
+| Memory Zone | Frame | Contents | State |
+| --- | --- | --- | --- |
+| **Stack (Top)** | `recursive(3)` | `n=3`, `data=10` | **Active** (Running) |
+| **Stack** | `recursive(2)` | `n=2`, `data=10` | **Frozen** (Waiting for n=3) |
+| **Stack** | `recursive(1)` | `n=1`, `data=10` | **Frozen** (Waiting for n=2) |
+| **Stack (Bottom)** | `Global/Main` | `Script Definitions` | **Frozen** |
+
+---
+
+### **Step-by-Step Visualization**
+
+#### **Step 1: First Call `recursive(1)`**
+
+The CPU creates a new "Stack Frame". It pushes the return address (so it knows where to go back to) and allocates space for `n` and `data`.
+
+![01](../assets/diagrams/01_04_stack_recursion_01.svg)
+
+---
+
+#### **Step 2: Second Call `recursive(2)**`
+
+`recursive(1)` pauses at the line `recursive(n+1)`. A **new** frame is pushed on top. Crucially, `data` here is a **new integer** at a different address.
+
+![02](../assets/diagrams/01_04_stack_recursion_02.svg)
+
+---
+
+#### **Step 3: Third Call `recursive(3)**`
+
+The Stack grows deeper. We now have three copies of `10` and three return addresses cluttering RAM.
+
+![final](../assets/diagrams/01_04_stack_recursion.svg)
+
+### **Questions**
+
+**Q1: How many "Frames" are currently active?**<br>
+**4 Frames** (Global + 3 recursive calls).
+Each frame consumes physical bytes. The CPU context switch must manage these layers.
+
+**Q2: Is it the same `10` in physical RAM?**<br>
+**NO.** Each frame has its own distinct copy.
+`recursive(1)` has a `10` at address `0x9000`.
+`recursive(2)` has a `10` at address `0x8FE0`.
+They are totally independent. This is why recursion is memory-heavy compared to loops.
+
+**Q3: What physical hardware limit would you hit?**<br>
+**The Stack Pointer Limit (Stack Overflow).**
+The Stack is a fixed-size segment of RAM (e.g., 8MB). If you recurse infinitely, the "Stack Pointer" register (ESP/RSP) decrements until it points to an address outside the allowed Stack range. The CPU's Memory Management Unit (MMU) catches this illegal access and triggers a hardware exception (Page Fault), which the OS turns into a crash (Segfault).
+
+---
+
+### **Key Takeaways**
+
+* **Recursion = Allocation:** Every function call is a memory allocation (Stack Frame).
+* **Locals are Private:** Variables with the same name in different frames are physically different bytes.
+* **The Hardware Limit:** The "Stack" is physically small. Infinite recursion crashes not because of "logic" but because you physically ran out of the reserved RAM slot.
+
+---
+

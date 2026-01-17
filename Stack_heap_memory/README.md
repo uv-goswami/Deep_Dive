@@ -23,7 +23,7 @@ To visualize this, imagine your RAM divided into two primary zones: the **Stack*
 2. `p1` sits on the stack and has an arrow pointing to `local_val` (also on the stack).
 3. `p2` sits on the stack, but its arrow crosses over into the **Heap** to point at the value `20`.
 
-![01_01_memory_basics_stack_heap](01_01_memory_basics_stack_heap.png)
+![01_01_memory_basics_stack_heap](/Diagrams/01_01_memory_basics_stack_heap.png)
 ---
 
 ### Questions
@@ -43,6 +43,13 @@ Those 8 bytes are located on the **Stack**. A pointer is just a variable that ho
 
 ## 01_02_arrays_and_decay
 
+```
+void tricky_arrays(){
+    int arr[3] = {5,6,7};
+    int* p = arr;
+}
+```
+
 ### Memory Diagram (The Stack)
 
 | Stack Address | Variable | Data/Value |
@@ -58,7 +65,8 @@ Those 8 bytes are located on the **Stack**. A pointer is just a variable that ho
 * `p` occupies **1 box** (8 bytes on a 64-bit system).
 * **Crucial Insight:** `arr` does **not** have an arrow. `arr` *is* the boxes. It doesn't "store" the address `0x1000` in a separate variable; it simply starts at that location.
 
-![01_02_arrays_and_decay](01_02_arrays_and_decay.svg)
+![01_02_arrays_and_decay](/Diagrams/01_02_arrays_and_decay.svg)
+
 ---
 
 ### Questions
@@ -108,8 +116,6 @@ void main() {
 
 ### **Step-by-Step Visualization**
 
-Draw this exactly in your notebook. We will trace the memory change line by line.
-
 #### **Step 1: Initialization**
 
 ```cpp
@@ -121,7 +127,7 @@ int* p3 = p2;
 **Status:** Both pointers hold the address `0x500`. The Heap at `0x500` is valid (owned by you).
 
 
-![01_03_1_memory_dangling](01_03_1_memory_dangling.svg)
+![01_03_1_memory_dangling](/Diagrams/01_03_1_memory_dangling.svg)
 
 ---
 
@@ -140,7 +146,7 @@ delete p2;  // <--- LINE A
 
 **CRITICAL:** `p2` is now a "Dangling Pointer". It points to memory that is no longer yours.
 
-![01_03_2_memory_dangling](01_03_2_memory_dangling.svg)
+![01_03_2_memory_dangling](/Diagrams/01_03_2_memory_dangling.svg)
 
 ---
 
@@ -156,7 +162,7 @@ p2 = nullptr; // <--- LINE B
 * **Stack:** `p2` is now `0` (Safe). If you try to use `p2`, it will crash cleanly (Segfault on NULL).
 * **Stack:** `p3` **STILL** holds `0x500`. `p3` did not get the memo. It is still pointing to the dead body.
 
-![01_03_3_memory_dangling](01_03_3_memory_dangling.svg)
+![01_03_3_memory_dangling](/Diagrams/01_03_3_memory_dangling.svg)
 ---
 
 #### **Step 4: The Crash (Use After Free)**

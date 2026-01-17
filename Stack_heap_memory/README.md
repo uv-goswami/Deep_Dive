@@ -122,6 +122,7 @@ int* p3 = p2;
 
 
 ![01_03_1_memory_dangling](01_03_1_memory_dangling.svg)
+
 ---
 
 #### **Step 2: The `delete` Command**

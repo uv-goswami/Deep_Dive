@@ -65,7 +65,7 @@ void tricky_arrays(){
 * `p` occupies **1 box** (8 bytes on a 64-bit system).
 * **Crucial Insight:** `arr` does **not** have an arrow. `arr` *is* the boxes. It doesn't "store" the address `0x1000` in a separate variable; it simply starts at that location.
 
-![01_02_arrays_and_decay](../assets/assets/diagrams/01_02_arrays_and_decay.svg)
+![01_02_arrays_and_decay](../assets/diagrams/01_02_arrays_and_decay.svg)
 
 ---
 

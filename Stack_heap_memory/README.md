@@ -65,7 +65,7 @@ void tricky_arrays(){
 * `p` occupies **1 box** (8 bytes on a 64-bit system).
 * **Crucial Insight:** `arr` does **not** have an arrow. `arr` *is* the boxes. It doesn't "store" the address `0x1000` in a separate variable; it simply starts at that location.
 
-![01_02_arrays_and_decay](/assets/assets/diagrams/01_02_arrays_and_decay.svg)
+![01_02_arrays_and_decay](../assets/assets/diagrams/01_02_arrays_and_decay.svg)
 
 ---
 
@@ -201,25 +201,7 @@ Line C crashes (or causes undefined behavior) because **p3** is a **dangling poi
 ---
 <br>
 
-```
-## 01_03_stack_recursion
-
-def recursive(n):
-    data = 10   #Local Variable
-
-    recursive(n+1)
-
-recursive(1)
-```
-
-**Verdict: CORRECT.**
-You have successfully predicted the physical behavior of the Stack. The "Stack" isn't just a concept; it is a physical region of RAM that fills up like a bucket.
-
-Here is the exact visualization you requested, formatted strictly.
-
----
-
-## 01_03_stack_recursion
+## 01_04_stack_recursion
 
 ```python
 def recursive(n):
@@ -260,7 +242,7 @@ The CPU creates a new "Stack Frame". It pushes the return address (so it knows w
 
 ---
 
-#### **Step 3: Third Call `recursive(3)**`
+#### **Step 3: Third Call `recursive(3)`**
 
 The Stack grows deeper. We now have three copies of `10` and three return addresses cluttering RAM.
 

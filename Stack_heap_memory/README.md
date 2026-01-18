@@ -273,4 +273,77 @@ The Stack is a fixed-size segment of RAM (e.g., 8MB). If you recurse infinitely,
 * **The Hardware Limit:** The "Stack" is physically small. Infinite recursion crashes not because of "logic" but because you physically ran out of the reserved RAM slot.
 
 ---
+---
 
+## 01_05_virtual_memory
+
+```cpp
+// Program A (PID: 1001)
+int* p = new int(999); // Address: 0x5000
+
+// Program B (PID: 1002)
+int* p = new int(888); // Address: 0x5000
+
+```
+
+### Memory Diagram (The "Big Lie")
+
+| Process | Virtual Address (The Lie) | Hardware Map | Physical RAM (The Truth) | Value |
+| --- | --- | --- | --- | --- |
+| **Proc A** | `0x5000` | **MMU Map** -> Frame #10 | Address `0x800010` | `999` |
+| **Proc B** | `0x5000` | **MMU Map** -> Frame #55 | Address `0x900055` | `888` |
+
+---
+
+### **Step-by-Step Visualization**
+
+#### **Step 1: The Request**
+
+Both programs ask the OS for memory. The OS Virtual Memory Manager says: "Sure, you both get `0x5000`."
+
+* Process A writes `999`.
+* Process B writes `888`.
+
+#### **Step 2: The Translation (The MMU)**
+
+When Process A's CPU tries to access `0x5000`:
+
+1. The CPU sends `0x5000` to the **MMU**.
+2. The **TLB** (Cache) checks: "Do I know where `0x5000` is for Process A?"
+3. **Hit:** It points to Physical Frame #10.
+4. Data `999` is stored at Physical RAM `0x800010`.
+
+![01_05_virtual_memory](../assets/diagrams/01_05_virtual_memory.svg)
+
+#### **Step 3: The Context Switch**
+
+The OS pauses Process A and switches to Process B.
+
+* **Crucial Step:** The OS **flushes** (clears) the TLB or changes the Page Table Register (CR3).
+* Now, when Process B asks for `0x5000`, the MMU translates it to Frame #55.
+* Process B reads `888`. It has no idea `999` even exists.
+
+---
+
+### **Answers to Your Questions**
+
+**Q1: Same physical RAM cell?**
+**NO.** `0x5000` is a virtual offset relative to the process, not a physical location.
+
+**Q2: Does Program B see 1 or 888?**
+**888.** Memory is strictly isolated. One process generally cannot touch another's memory without explicit Shared Memory setup.
+
+**Q3: The Hardware Component?**
+**MMU (Memory Management Unit).**
+
+* **Nuance:** The TLB is the *cache* inside the MMU. If you said TLB, you are thinking about performance (which is good), but the MMU is the actual hardware unit doing the work.
+
+---
+
+### **Key Takeaways**
+
+* **Pointers are Liars:** In C++, `&x` is never the real address. It is a virtual key.
+* **Protection:** If Process A goes rogue and writes to random pointers, it destroys its own virtual space, but it cannot overwrite Process B's physical frames (Segfault).
+* **The Cost:** Every memory access goes through the MMU. This is why TLB Hits are critical for speed.
+
+---

@@ -319,23 +319,22 @@ When Process A's CPU tries to access `0x5000`:
 
 The OS pauses Process A and switches to Process B.
 
-* **Crucial Step:** The OS **flushes** (clears) the TLB or changes the Page Table Register (CR3).
+* **Crucial Step:** The OS **flushes** (clears) the TLB or changes the Page Table Register.
 * Now, when Process B asks for `0x5000`, the MMU translates it to Frame #55.
 * Process B reads `888`. It has no idea `999` even exists.
 
 ---
 
-### **Answers to Your Questions**
+### **Questions**
 
-**Q1: Same physical RAM cell?**
+**Q1: Same physical RAM cell?**<br>
 **NO.** `0x5000` is a virtual offset relative to the process, not a physical location.
 
-**Q2: Does Program B see 1 or 888?**
+**Q2: Does Program B see 1 or 888?**<br>
 **888.** Memory is strictly isolated. One process generally cannot touch another's memory without explicit Shared Memory setup.
 
-**Q3: The Hardware Component?**
+**Q3: The Hardware Component?**<br>
 **MMU (Memory Management Unit).**
-
 * **Nuance:** The TLB is the *cache* inside the MMU. If you said TLB, you are thinking about performance (which is good), but the MMU is the actual hardware unit doing the work.
 
 ---
@@ -347,3 +346,128 @@ The OS pauses Process A and switches to Process B.
 * **The Cost:** Every memory access goes through the MMU. This is why TLB Hits are critical for speed.
 
 ---
+---
+
+# 01_06_cpu_cache_false_sharing
+
+```cpp
+#include <iostream>
+#include <thread>
+#include <chrono>
+
+
+struct PlayerStats{
+    long health;
+    long armor;
+};
+PlayerStats stats;
+
+void updateHealth(){
+    for(int i=0; i<100000000; i++){
+        stats.health++;
+    }
+}
+
+void updateArmor(){
+    for(int i = 0; i<100000000; i++){
+        stats.armor++;
+    }
+}
+
+int main(){
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    std::thread t1(updateHealth);
+    std::thread t2(updateArmor);
+
+    t1.join();
+    t2.join();
+
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> diff = end -start;
+
+    std::cout<<"Time taken: "<< diff.count() << std::endl;
+
+    return 0;
+}
+```
+
+## Output:
+![output](../assets/diagrams/output_01_05_cpu_cache_false_sharing.png) 
+
+## Theory
+
+**What is a Core?** <br>
+A Core is a complete independent CPU execution unit. It has its own Registers and its own L1/L2 Cache. It shares the main RAM and L3 Cache with other cores. Core A can not look at Core B's L1 Cache.
+
+**Cache Line (The Granularity of RAM)** <br>
+The CPU never reads a single byte or a single integer(4 bytes) from RAM. It is too slow. Instead it grabs a Chunk of memory called a Cache Line.
+    * Standatd Size: 64 Bytes
+    * If you ask for `health` (8 bytes), the CPU drags the entire 64 byte neighborhood (including armor) into the cache.
+
+**MESI Protocol** <br>
+Since Core A and core B have separate caches they must agree on the truth. A cache line can only be written by one core at a time. If Core A modifies any byte in the line, Cre B's copy of the entire line is marked Invalid. Core B is forced to dump its cache and re-fetch from RAM.
+
+
+## Memory Visualization (The Ping-Pong War)
+![01_05_cpu_cache_false_sharing](../assets/diagrams/01_06_cpu_cache_false_sharing.svg)
+
+**Step-by-step Ecplanation**
+    1. **Load**: Core A loads the Cache line to edit health. Core B loads the line to edit armor.
+    2. **Conflict**: Core A modifies `health`. Hardware requires exclusive ownership of th whole Cache line.
+    3. **Kill**: Core A sends a signal to all: "I touched this line. Everyone else destroy your copies(Invalidate).
+    4. Core B tries to write `armor`. It looks in its cache. The line is dead. It must pause, go to RAM and fetch the updated line from Core A.
+    5. Core B modifies `armor`. It now owns the line. It kills Core A's copy.
+    6. **Result**: This turned a memory operation(1 cycle) into hardware synchronization war (100+ cycles).
+
+
+ # Fix:
+ We must ensure `health` and `armor` live on different Cache Lines so the cores dont fight.
+ Use `alignas` to force the compiler to put health and armor in different Cache Lines.
+
+ ```cpp
+#include <iostream>
+#include <thread>
+#include <chrono>       // chrono is a modern c++ time library
+
+
+struct PlayerStats{
+    alignas(64) long health;       // <- Used alignas
+    alignas(64) long armor;         // <- Used alignas
+};
+PlayerStats stats;
+
+void updateHealth(){
+    for(int i=0; i<100000000; i++){
+        stats.health++;
+    }
+}
+
+void updateArmor(){
+    for(int i = 0; i<100000000; i++){
+        stats.armor++;
+    }
+}
+
+int main(){
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    std::thread t1(updateHealth);
+    std::thread t2(updateArmor);
+
+    t1.join();
+    t2.join();
+
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> diff = end -start;
+
+    std::cout<<"Time taken: "<< diff.count() << std::endl;
+
+    return 0;
+}
+
+```
+
+## ![output_01_05_cpu_cache_false_sharing_used_alignas](output_01_05_cpu_cache_false_sharing_alignas.png)

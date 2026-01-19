@@ -403,8 +403,8 @@ A Core is a complete independent CPU execution unit. It has its own Registers an
 
 **Cache Line (The Granularity of RAM)** <br>
 The CPU never reads a single byte or a single integer(4 bytes) from RAM. It is too slow. Instead it grabs a Chunk of memory called a Cache Line.
-    * Standatd Size: 64 Bytes
-    * If you ask for `health` (8 bytes), the CPU drags the entire 64 byte neighborhood (including armor) into the cache.
+* Standatd Size: 64 Bytes
+* If you ask for `health` (8 bytes), the CPU drags the entire 64 byte neighborhood (including armor) into the cache.
 
 **MESI Protocol** <br>
 Since Core A and core B have separate caches they must agree on the truth. A cache line can only be written by one core at a time. If Core A modifies any byte in the line, Cre B's copy of the entire line is marked Invalid. Core B is forced to dump its cache and re-fetch from RAM.
@@ -414,12 +414,12 @@ Since Core A and core B have separate caches they must agree on the truth. A cac
 ![01_05_cpu_cache_false_sharing](../assets/diagrams/01_06_cpu_cache_false_sharing.svg)
 
 **Step-by-step Ecplanation**
-    1. **Load**: Core A loads the Cache line to edit health. Core B loads the line to edit armor.
-    2. **Conflict**: Core A modifies `health`. Hardware requires exclusive ownership of th whole Cache line.
-    3. **Kill**: Core A sends a signal to all: "I touched this line. Everyone else destroy your copies(Invalidate).
-    4. Core B tries to write `armor`. It looks in its cache. The line is dead. It must pause, go to RAM and fetch the updated line from Core A.
-    5. Core B modifies `armor`. It now owns the line. It kills Core A's copy.
-    6. **Result**: This turned a memory operation(1 cycle) into hardware synchronization war (100+ cycles).
+1. **Load**: Core A loads the Cache line to edit health. Core B loads the line to edit armor.    
+2. **Conflict**: Core A modifies `health`. Hardware requires exclusive ownership of th whole Cache line.
+3. **Kill**: Core A sends a signal to all: "I touched this line. Everyone else destroy your copies(Invalidate).
+4. Core B tries to write `armor`. It looks in its cache. The line is dead. It must pause, go to RAM and fetch the updated line from Core A.
+5. Core B modifies `armor`. It now owns the line. It kills Core A's copy.
+6. **Result**: This turned a memory operation(1 cycle) into hardware synchronization war (100+ cycles).
 
 
  # Fix:
@@ -471,3 +471,214 @@ int main(){
 ```
 
 ## ![output_01_05_cpu_cache_false_sharing_used_alignas](../assets/diagrams/output_01_05_cpu_cache_false_sharing_alignas.png)
+
+**Why this works:** Now, health is on Cache Line X. armor is on Cache Line Y. Core A grabs Line X. Core B grabs Line Y. They never talk to each other. True Parallelism.
+
+# Questions:
+Q1: Does writing to health logically change armor?
+No. Logically, in C++ code, they are independent.
+
+Q2: How big is a standard Cache Line? <br>
+64 Bytes-the hardware grabs 64 bytes. This means health and armor (8 + 8 = 16 bytes total) are physically inseparable in the cache.
+
+Q3: If Core A modifies health, what happens to Core B's chunk? <br>
+It becomes INVALID. Even though Core B only wants armor, the entire line is trashed because the hardware manages memory in 64-byte chunks, not individual variables.
+
+Q4: Why is it slow? Bus Contention (Traffic Jam).<br>
+The CPU spends all its time synchronizing the cache line between cores (sending "Invalidate" signals) rather than actually doing the math. This is called False Sharing.
+
+
+# Key Takeaways
+1. **False Sharing:** When two threads modify independent variables that effectively sit on the same Cache Line.
+
+2. **64 Bytes:** The CPU grabs memory in chunks. If you touch Byte 0, you own Byte 63.
+
+3. **Performance cost:** False Sharing causes "Cache Thrashing," reducing multicore performance to worse than single-core.
+
+---
+---
+# 01_07_deadlock_banking
+
+```cpp
+
+struct Account {
+    int id;
+    int balance;
+    std::mutex m; // Lock to protect this specific account
+};
+
+// Function runs on multiple threads
+void transfer(Account& from, Account& to, int amount) {
+    // 1. Lock the sender
+    from.m.lock();
+    // 2. Lock the receiver
+    to.m.lock(); 
+    
+    // Critical Section (Move Money)
+    from.balance -= amount;
+    to.balance += amount;
+
+    // 3. Unlock both
+    to.m.unlock();
+    from.m.unlock();
+}
+```
+---
+**Complete Code**
+```cpp
+#include <iostream>
+#include <thread>
+#include <mutex>
+
+struct Account{
+    int id;
+    int balance;
+    std::mutex m;
+};
+
+void transfer(Account& from, Account& to, int amount){
+
+    from.m.lock();
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(10)); //used to get forced deadlock
+
+    to.m.lock();
+
+
+    from.balance -= amount;
+    to.balance += amount;
+
+    to.m.unlock();
+    from.m.unlock();
+}
+
+int main(){
+    Account A{1, 1000};
+    Account B{2, 500};
+
+    std::thread t1(transfer, std::ref(A), std::ref(B), 100);
+    std::thread t2(transfer, std::ref(B), std::ref(A), 50);
+
+    t1.join();
+    t2.join();
+
+    std::cout <<"Done\n";
+}
+```
+**Output**
+![output](../assets/diagrams/image.png)
+
+
+## Theory
+**Conditions of Deadlock**:
+1. **Mutual Exclusion**: Only one thread can hold the resource.
+2. **Hold and wait**: I have a lock, and I am waiting for another.
+3. **No Preemption**: You can not forcibly steal a lock from another thread.
+4. **Circular Wait**: A->B->A. 
+
+## Diagram:
+![01_06_deadlock_banking](../assets/diagrams/01_07_deadlock_banking.svg)
+
+### **Step-by-Step Visualization**
+
+1. **T-Minus 0:** Thread 1 calls `transfer(Alice, Bob)`. Thread 2 calls `transfer(Bob, Alice)`.
+2. **Step 1:**
+* Thread 1 runs `from.m.lock()`. `from` is Alice. **Thread 1 holds Lock Alice.**
+* Thread 2 runs `from.m.lock()`. `from` is Bob. **Thread 2 holds Lock Bob.**
+
+
+3. **Step 2 (The Trap):**
+* Thread 1 runs `to.m.lock()`. `to` is Bob. Bob is held by Thread 2. **Thread 1 Sleeps.**
+* Thread 2 runs `to.m.lock()`. `to` is Alice. Alice is held by Thread 1. **Thread 2 Sleeps.**
+
+
+4. **Result:** The OS Scheduler sees both threads are "Waiting." It puts them to sleep forever. The banking system freezes.
+
+---
+
+
+## Questions
+
+**Q1: What happens next line?**
+* **Stalemate (Blocking).** Both threads enter a `BLOCKED` state. They consume 0% CPU but will never wake up.
+
+**Q2: The Wait Graph?**
+* See diagram above. It is a **Cycle**. T1 -> LockB -> T2 -> LockA -> T1.
+
+
+**Q3: The Fix?**
+* **Global Lock Ordering.** We must ensure that everyone locks accounts in the **same order**, regardless of who is sender/receiver.
+
+---
+
+### **THE FIX: Lock Hierarchy (Ordering by ID)**
+
+We ignore who is "from" and who is "to." We always lock the account with the **Lower ID** first.
+
+This breaks "Circular Wait." If both threads try to touch Alice and Bob, **BOTH** will fight for Alice first. One wins, one waits. No deadlock.
+
+```cpp
+#include <iostream>
+#include <thread>
+#include <mutex>
+
+struct Account{
+    int id;
+    int balance;
+    std::mutex m;
+};
+
+void transfer(Account& from, Account& to, int amount){
+
+    std::mutex *first, *second;
+
+    if (from.id < to.id){
+        first = &from.m;
+        second = &to.m;
+    } else {
+        first = &to.m;
+        second = &from.m;
+    }
+
+    first->lock();
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(10)); //used to get forced deadlock
+
+    second->lock();
+
+
+    from.balance -= amount;
+    to.balance += amount;
+
+    first->unlock();
+    second->unlock();
+}
+
+int main(){
+    Account A{1, 1000};
+    Account B{2, 500};
+
+    std::thread t1(transfer, std::ref(A), std::ref(B), 100);
+    std::thread t2(transfer, std::ref(B), std::ref(A), 50);
+
+    t1.join();
+    t2.join();
+
+    std::cout <<"Done\n";
+}
+
+```
+
+*Note: In modern C++17, we simply use `std::scoped_lock lock(from.m, to.m);`, which uses a deadlock-avoidance algorithm internally. But we must understand the ID sorting logic to understand **how** it works.*
+
+---
+## Output
+![output](<Screenshot from 2026-01-19 23-47-33.png>)
+
+### **Key Takeaways**
+
+1. **Circular Wait:** The root cause of deadlock is usually `A waits for B, B waits for A`.
+2. **Lock Ordering:** The universal cure is to agree on a global order (e.g., Memory Address order, ID order) and always acquire locks in that sequence.
+3. **Hold and Wait:** Never hold a lock while waiting for another unless you are sure of the order.
+
+---

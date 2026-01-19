@@ -1,0 +1,10 @@
+*.d
+*.o
+*.obj
+
+*.exe
+*.dll
+
+output/
+
+.vscode/

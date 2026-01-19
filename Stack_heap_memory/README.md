@@ -470,4 +470,4 @@ int main(){
 
 ```
 
-## ![output_01_05_cpu_cache_false_sharing_used_alignas](output_01_05_cpu_cache_false_sharing_alignas.png)
+## ![output_01_05_cpu_cache_false_sharing_used_alignas](../assets/diagrams/output_01_05_cpu_cache_false_sharing_alignas.png)

@@ -22,7 +22,7 @@ void transfer(Account& from, Account& to, int amount){
 
     first->lock();
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(10)); //used to get forced deadlock
+    std::this_thread::sleep_for(std::chrono::milliseconds(10)); 
 
     second->lock();
 

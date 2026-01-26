@@ -673,7 +673,7 @@ int main(){
 
 ---
 ## Output
-![output](<Screenshot from 2026-01-19 23-47-33.png>)
+![output](../assets/diagrams/output_01_07.png)
 
 ### **Key Takeaways**
 
@@ -682,3 +682,117 @@ int main(){
 3. **Hold and Wait:** Never hold a lock while waiting for another unless you are sure of the order.
 
 ---
+---
+
+# 01_08_syscall_overhead
+
+```cpp
+import time
+import os
+
+data_chunk = b'a' * 1024 * 1024 * 100
+
+
+def approach_A_slow():
+    with open("slow.txt", "wb") as f:
+        for _ in range(1024*1024 * 100):
+            f.write(b"a")
+
+start = time.time()
+approach_A_slow()
+end = time.time()
+print(f"Approach A byte by byte write: : {end - start:.6f} seconds")
+
+def approach_B_fast():
+    with open("fast.txt", "wb") as f:
+        f.write(data_chunk)
+
+start = time.time()
+approach_B_fast()
+end = time.time()
+print(f"Approach B took: {end - start: .6f} seconds")
+
+os.remove("slow.txt")
+os.remove("fast.txt")
+```
+## Output
+
+
+## Theory
+Modern CPU runs in two different privilage levels - User mode(Ring 3) and Kernel Mode(Ring 0 )
+
+* **User Mode:** Where your code(Python/Browser) runs. It is restricted. It can not touch the disk, network drivers or memory directly.
+
+* **Kernel Mode:** Where the OS(linux/Windows) runs. It has 'God Mode'  access to hardware. 
+
+**System Calls(Syscall):** To write a a file, a Python program can not just do it. It must first ask the OS. This request is called Syscall. This is not a function call. It is a **System Interrupt(trap)**. The CPU must stop your program, save the state , swith to the hardware mode flag, jump to the OS mode, do the work and switch back.
+
+**Cost:** A standard function call takes 1 nanosecond, A system takes 1000 nanoseconds. If you do it 1 million times. A system call will waste 1 second just on asking permission.
+
+## Memory Visualization
+
+![diagram](../assets/diagrams/01_08_syscall_overhead.svg)
+
+## Step-by-Step Explanation
+1. **The Call:** The Python Code calls `f.write(b"a")`
+2. **The Trap:** The CPU triggers an interrupt.
+3. **The Switch:** The CPU saves all the registers(variables) to RAM. It Switches the **Privilage bit** from User to Kernel.
+4. **The Execution:** The OS Kernel wakes up, checks if you have the permission to write to this file, talks to the SSD driver , and places the bytes in write queue .
+5. **The Return:** The OS returns restores the registers,switches the Privilage Bit back to the User , and resumes the Python script.
+6. **The Loop:** Approach A does this massive context switch 1000000 time while Approach B does it once.
+
+## Flaw
+
+While Approach B is the fastest for small datasets, it suffers from a critical scalability issue: Memory Consumption.
+In Approach B, the entire dataset must be loaded into the User Space RAM before the System Call is even triggered.
+**The Problem:** If you attempt to write a 50GB file on a machine with only 16GB of RAM, your program will crash with an OutOfMemory error or cause the OS to enter a "swapping" death spiral.
+ 
+## The fix
+By using a Fixed-Size Buffer, we create a "streaming" pipeline. We only ever hold a tiny amount of data (e.g., 64KB) in RAM at any given moment, regardless of whether the final file is 1MB or 1TB.
+
+```py
+import time
+import os
+
+buffer = bytearray()
+
+def approach_buffer():
+    for i in range(10000000):
+        buffer.extend(b"a")
+
+        if len(buffer) >= 1024*1024: 
+            with open("fast.txt", "ab") as f:
+                f.write(buffer)
+                buffer.clear()
+
+start = time.time()
+approach_buffer()
+end = time.time()
+print(f"Approch Buffer fix took: {end-start: .6f} seconds")
+```
+### Why this works
+
+We replaced 4,096 expensive System Calls with 1 System Call + 4,096 cheap memory operations. RAM is fast; Mode Switching is slow.
+
+### Questions
+
+**Q1: Why is A slower?**<br>
+It triggers 1,000,000 **Context Switches**. The CPU spends more time saving/restoring state and checking permissions than actually writing data.
+
+**Q2: What are the two modes?**<br>
+**User Mode** (Ring 3) and **Kernel Mode** (Ring 0).
+
+**Q3: Who takes control?**<br>
+The **OS Kernel** (via the Interrupt Handler).
+
+**Q4: How many transitions for B?**<br>
+**One** (technically two: one into Kernel, one back out).
+
+### Key Takeaways
+
+1. **Syscalls are Expensive:** Treat them like network calls. Don't do them inside a tight loop.
+2. **The Boundary:** There is a physical hardware wall (Privilege Rings) between your code and the hardware. Crossing it costs CPU cycles.
+3. **Buffering:** The universal solution to I/O latency. Group small tasks into one big batch.
+
+---
+

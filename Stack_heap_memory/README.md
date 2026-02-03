@@ -1133,17 +1133,17 @@ def move(self, other):
 
 ---
 
-### **Answers to Your Questions**
+### **Questions**
 
-* **Q1: The State?**
+**Q1: The State?**
 * **RUNNING.** The thread is actively executing instructions (checking `if`, calling `sleep`, printing).
 
 
-* **Q2: The Impact?**
+**Q2: The Impact?**
 * **Livelock is worse.** It consumes maximum resources for zero output. Deadlock just freezes resources.
 
 
-* **Q3: The Fix?**
+**Q3: The Fix?**
 * **Randomized Exponential Backoff.** Wait a random amount of time before retrying.
 
 ---

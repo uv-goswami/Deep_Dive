@@ -715,8 +715,6 @@ print(f"Approach B took: {end - start: .6f} seconds")
 os.remove("slow.txt")
 os.remove("fast.txt")
 ```
-## Output
-
 
 ## Theory
 Modern CPU runs in two different privilage levels - User mode(Ring 3) and Kernel Mode(Ring 0 )
@@ -795,4 +793,357 @@ The **OS Kernel** (via the Interrupt Handler).
 3. **Buffering:** The universal solution to I/O latency. Group small tasks into one big batch.
 
 ---
+---
 
+# 01_09_fragmentation
+
+```cpp
+void fregmentation_scenerio(){
+    std::vector<void*> ptrs;
+
+    for(int i = 0; i<1000000; i++){
+        ptrs.push_back(new char[1024]);
+    }
+
+    for(int i = 0; i< 1000000; i+=2){
+        delete[] (char*) ptrs[i];
+        ptrs[i] = nullptr;
+    }
+
+    char* bigblock = new char[200*1024*1024];
+
+}
+
+```
+
+## Theory
+
+**External Fragmentation:** occurs when when the free memory is separated into small blocks and is scattered by the allocated memory. Free memory exists but it is divided into small non contiguous blocks. Even if the total free memory is sufficient, a large process cannot be loaded because no single free block is big enough.
+
+## Memory Visualization 
+**Swiss Cheese Heap**
+![01_09_fragmentation](../assets/diagrams/01_09_fragmentation.png)
+
+## Step by Step Visulaization
+
+**Step 1 (Allocation):** You lay down 1,000,000 bricks side-by-side. The Heap is perfectly packed.
+* [Brick][Brick][Brick][Brick]...
+
+**Step 2 (Fragmentation):** You remove every second brick.
+* [Brick][Hole][Brick][Hole]...
+
+**Step 3 (The Crash):** You try to place a massive 2GB Slab.
+* The Allocator scans the holes.
+* "Is Hole 1 big enough?" No (1KB).
+* "Is Hole 2 big enough?" No (1KB).
+* ... Scan finished. No slot found.
+* CRASH (std::bad_alloc).
+
+## Fix
+We stop using `new` and `delete` for individual objects. Instead we allocate one giant block at startup (preallocation) and manage the "slots" manually(i.e it has its own set of rules to manage that particular giant block of memory). This prevents External Fregmentation but there can still be internal fregmentation.
+```cpp
+#include <iostream>
+#include <exception>
+#include <vector>
+
+using std::cout;
+using std::endl;
+using std::vector;
+using std::cerr;
+
+struct Particle{
+    char data[1024];
+    bool active;
+};
+
+class ParticlePool{
+    vector<Particle> pool;
+
+public:
+    ParticlePool(size_t size){
+        pool.resize(size);
+        for(auto& p : pool){
+            p.active = false;
+        }
+    }
+
+    Particle* spawn(){
+        for(auto& p : pool){
+            if(!p.active){
+                p.active = true;
+                return &p;
+            }
+        }
+        return nullptr;
+    }
+
+    void kill(Particle* p){
+        p->active = false;
+    }
+
+
+};
+
+int main(){
+
+    ParticlePool mypool(1024);
+
+    vector<Particle*> activeParticles;
+
+    for(int i =0 ; i< 200*1024; i++){
+        Particle* p=  mypool.spawn();
+        if(p){
+            activeParticles.push_back(p);
+        }
+    }
+
+    cout<<"Success"<<endl;
+
+
+
+    return 0;
+}
+
+```
+
+## Why this Works:
+* **Zero Fragmentation:** The std::vector reserves one solid chunk of memory. It never grows or shrinks during the game loop.
+
+* **Deterministic Performance:** spawn() and kill() are just math operations. No asking the OS for memory. No Syscalls. No searching the heap.
+
+* **Cache Locality:** Since all Particle objects are neighbors in the vector, the CPU loads them efficiently (Spatial Locality).
+
+## Key Takeaways
+* **Fragmentation Kills Long-Runners:** A server or game running for days will eventually crash if it spams new/delete of different sizes, even if total RAM is free.
+
+* **Virtual vs. Physical:** malloc fails when Virtual Address Space is fragmented. The state of physical RAM pages is managed by the OS and is irrelevant to the crash.
+
+* **Pools are King:** High-performance systems (Game Engines, High-Frequency Trading) pre-allocate everything. malloc is forbidden in the "Hot Path" (the main loop).
+
+## Questions 
+1. What does the Heap look like after Step 2?
+
+- It looks like a checkerboard or Swiss Cheese. Used blocks and free blocks alternate perfectly (Used, Free, Used, Free...). The "Total Free Memory" is high (~500MB), but the "Maximum Contiguous Block" is tiny (1KB).
+
+2. Does C++ new require physical RAM to be contiguous? 
+- No. It requires Virtual Address Space to be contiguous. The MMU handles the mapping to physical RAM, which can be scattered across different DRAM chips. However, the application (and the Allocator) only sees Virtual Addresses, so if a contiguous virtual range isn't available, the allocation fails.
+
+3. How do we fix this? 
+- Object Pooling. Pre-allocate a large chunk of memory for all necessary objects at the application start. Use a "Free List" or "Active Flag" to manage objects internally. This ensures the underlying heap memory remains one solid block and never fragments.
+
+## FINAL ANSWER
+The crash is caused by Heap Fragmentation (specifically External Fragmentation). Even though the system has 15GB of free RAM, deleting every second object created millions of tiny 1KB 'holes' in the Virtual Address Space.
+
+When we request a 2GB allocation, the Memory Allocator attempts to find a contiguous range of virtual addresses of that size. Since the largest available hole is only 1KB, the request fails, triggering an 'Out of Memory' exception (std::bad_alloc).
+
+To fix this in a high-performance environment, I would implement an Object Pool. I would pre-allocate a large, contiguous block of memory for all objects at startup. Instead of calling new and delete, I would simply toggle an active flag or use a free-list to manage object lifecycles. This guarantees zero fragmentation and ensures deterministic memory access patterns.
+
+
+# 01_10_scheduling_tax
+
+### **Theory: The Context Switch & The Scheduler**
+
+This is what actually happens when your computer "multitasks."
+
+#### **1. The Thread Control Block (TCB)**
+
+Every thread has a "Passport" stored in the Kernel's RAM called the **TCB**. It stores:
+
+* **Program Counter (PC):** "I was at line 50."
+* **Stack Pointer (SP):** "My variables are at address 0x9000."
+* **Register Values:** "RAX was 5, RBX was 10."
+
+#### **2. Preemptive Scheduling (The OS is Boss)**
+
+The OS uses a hardware timer. Every **Quantum** (e.g., 10ms), the timer interrupts the CPU.
+
+* **The Interrupt:** The hardware forces the CPU to jump to the OS Kernel code.
+* **The Save:** The OS copies the current register values into Thread A's TCB in RAM.
+* **The Pick:** The Scheduler picks Thread B.
+* **The Load:** The OS copies Thread B's TCB values back into the CPU registers.
+* **The Resume:** The CPU jumps to Thread B's PC.
+
+**The Cost:** This sequence takes thousands of cycles. Doing it 5,000 times a second leaves no time for actual work.
+
+#### **3. Cooperative Scheduling (Async/Event Loop)**
+
+In `async` (FastAPI/Node.js), the **OS is NOT the boss**. The **Code is the boss**.
+
+* The code runs until it hits `await`.
+* It voluntarily says: "I am waiting for the Database. CPU, go do something else."
+* **Zero OS Context Switch.** The language runtime (Python/Node) just swaps a function pointer. It stays in the same Process, same Thread, same Stack.
+
+---
+
+### **Memory Diagram (The Context Switch Tax)**
+
+![01_10_scheduling_tax](../assets/diagrams/01_10_scheduling_tax.png)
+
+---
+
+### **Step-by-Step Visualization (The "Thrashing" Scenario)**
+
+**Scenario:** You have 5,000 threads. The OS Quantum is 10ms.
+
+1. **0ms:** Thread 1 starts. It loads its variables into L1 Cache.
+2. **10ms:** **INTERRUPT!** The OS pauses Thread 1. It saves registers to RAM.
+3. **10.1ms:** The OS picks Thread 2. It loads Thread 2's registers.
+4. **10.2ms:** Thread 2 runs. It tries to read variable `X`.
+* **Cache Miss:** L1 Cache is full of Thread 1's data.
+* Thread 2 waits for RAM (Slow).
+* Thread 2 overwrites L1 Cache with its own data.
+
+
+5. **20ms:** **INTERRUPT!** The OS pauses Thread 2.
+6. **Result:** The CPU spends more time saving/loading/waiting for RAM than executing code. This is called **Thrashing**.
+
+---
+
+### **The Fix: Async IO (The Waiting Room)**
+
+FastAPI **one thread** to handle thousands of users.
+
+![01_10_scheduling_tax_fix](../assets/diagrams/01_10_scheduling_tax_fix.png)
+
+**How it works:**
+
+1. User A asks for data. Code hits `await db.query(...)`.
+2. Python adds User A to a "Waiting List" and immediately switches to User B.
+3. **No OS intervention.** No register saving. No cache flushing.
+4. When the DB replies, the Event Loop wakes up User A.
+
+```python
+import asyncio
+import time
+
+async def handle_user(user_id):
+    # Simulate IO wait (Yield control, don't block CPU)
+    await asyncio.sleep(0.001) 
+
+async def main():
+    start = time.time()
+    # Create 5000 tasks, but run them on ONE thread
+    tasks = [handle_user(i) for i in range(5000)]
+    await asyncio.gather(*tasks)
+    print(f"Time taken: {time.time() - start:.4f}s")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
+```
+
+---
+
+### **Questions**
+
+**Q1: Why is it slower?**
+* **Context Switch Overhead.** The CPU wastes cycles saving/restoring state to RAM.
+* **Cache Thrashing.** Threads fight over the limited L1/L2 cache, causing constant RAM fetches.
+* **GIL Contention (Python specific):** Threads fight for the interpreter lock.
+
+
+**Q2: Where is state saved?**
+* **The TCB (Thread Control Block)** in Kernel RAM. It is **copied from** the registers. It is NOT stored "in" the registers.
+
+
+**Q3: Does `async` create a new OS Thread?**
+* **NO.** `async` creates a **Task** (a lightweight object in Heap memory). Thousands of tasks run on a **single** OS Thread.
+
+
+
+---
+
+### **Key Takeaways**
+
+1. **Threads are Expensive:** A thread costs ~1MB RAM (Stack) and microseconds of CPU time to switch.
+2. **Async is Cheap:** A task costs bytes of RAM and nanoseconds to switch.
+3. **The Bottleneck is Context:** The more you switch, the colder your cache gets. Performance is about keeping the CPU focused on one data set for as long as possible.
+
+---
+---
+
+# 11_livelock_corridor
+
+### **Theory: Livelock & Backoff Algorithms**
+
+* **Livelock:** A situation where two or more processes continuously change their states in response to changes in the other processes without doing any useful work. It is a "Busy Wait" cycle.
+* **Starvation:** When a thread never gets access to resources because others (Livelocked or High Priority threads) are hogging the CPU.
+* **Ethernet CSMA/CD (Carrier Sense Multiple Access / Collision Detection):**
+* When two computers try to talk on a wire at the same time, a "Collision" happens.
+* **The Fix:** Both stop. Computer A picks a random number (0-10ms). Computer B picks a random number (0-10ms). They wait. The one with the shorter time goes first.
+* **Exponential:** If they collide *again*, they double the range (0-20ms), then (0-40ms). This guarantees the collision resolves eventually.
+
+
+
+---
+
+### **Memory Diagram (The Polite Corridor)**
+
+![11_livelock_corridor](../assets/diagrams/11_livelock_corridor.png)
+
+---
+
+### **Step-by-Step Visualization**
+
+1. **T=0ms:** Thread A sees B blocking. A moves Right.
+2. **T=0ms:** Thread B sees A blocking. B moves Right.
+3. **T=100ms:** A checks. "Oh, B is on the Right now. I must move Left."
+4. **T=100ms:** B checks. "Oh, A is on the Right now. I must move Left."
+5. **T=200ms:** They both move Left. Collision.
+6. **Loop:** Infinite. The server fans spin up to max speed.
+
+---
+
+### **The Fix: Exponential Backoff (Random Jitter)**
+
+We replace the deterministic `time.sleep(0.1)` with a randomized wait.
+
+![11_livelock_corridor_fix](../assets/diagrams/11_livelock_corridor_fix.png)
+
+```python
+import time
+import random
+
+def move(self, other):
+    attempt = 1
+    while self.path_blocked:
+        print(f"{self.name}: Blocked. Backing off...")
+        
+        # THE FIX: Random Jitter + Exponential Backoff
+        # Wait between 0 and 2^attempt * 0.1 seconds
+        wait_time = random.uniform(0, (2 ** attempt) * 0.1)
+        time.sleep(wait_time) 
+        
+        if not other.path_blocked:
+             self.path_blocked = False
+             print(f"{self.name}: Passed after {attempt} retries!")
+             return
+             
+        attempt += 1
+
+```
+
+---
+
+### **Key Takeaways**
+
+1. **Symmetry Kills:** Livelocks happen because processes are "too perfect." They run the exact same logic at the exact same speed.
+2. **Randomness Saves:** In distributed systems (and real life), adding a little randomness (Jitter) prevents synchronized failures.
+3. **Cloud Cost:** Deadlocks halt your app (downtime). Livelocks halt your app **AND** max out your CPU credit balance (bankruptcy).
+
+---
+
+### **Answers to Your Questions**
+
+* **Q1: The State?**
+* **RUNNING.** The thread is actively executing instructions (checking `if`, calling `sleep`, printing).
+
+
+* **Q2: The Impact?**
+* **Livelock is worse.** It consumes maximum resources for zero output. Deadlock just freezes resources.
+
+
+* **Q3: The Fix?**
+* **Randomized Exponential Backoff.** Wait a random amount of time before retrying.
+
+---

@@ -12,18 +12,25 @@ data = {
     "amount": 500
 }
 
-json_data = json.dumps(data)
-byte_data = json_data.encode()
-length = len(byte_data)
+data = json.dumps(data)
+length = len(data)
 
 request = (
     f"POST /order HTTP/1.1\r\n"
     f"Host: localhost\r\n"
     f"Content-type: application/json\r\n"
     f"Content-length: {length}\r\n"
-    f"\r\n\r\n"
-    f"{byte_data}"
     f"Connection: close\r\n"
+    f"\r\n"
+    f"{data}"
 )
 
+
 client.send(request.encode())
+response = client.recv(4096).decode()
+header, body = response.split("\r\n\r\n", 1)
+response_body = json.loads(body)
+print(header)
+print(response_body)
+
+client.close()

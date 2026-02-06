@@ -65,7 +65,7 @@ void tricky_arrays(){
 * `p` occupies **1 box** (8 bytes on a 64-bit system).
 * **Crucial Insight:** `arr` does **not** have an arrow. `arr` *is* the boxes. It doesn't "store" the address `0x1000` in a separate variable; it simply starts at that location.
 
-![01_02_arrays_and_decay](../assets/diagrams/01_02_arrays_and_decay.svg)
+![01_02_arrays_and_decay](./diagrams/01_02_arrays_and_decay.svg)
 
 ---
 
@@ -230,7 +230,7 @@ recursive(1)
 
 The CPU creates a new "Stack Frame". It pushes the return address (so it knows where to go back to) and allocates space for `n` and `data`.
 
-![01](../assets/diagrams/01_04_stack_recursion_01.svg)
+![01](./diagrams/01_04_stack_recursion_01.svg)
 
 ---
 
@@ -238,7 +238,7 @@ The CPU creates a new "Stack Frame". It pushes the return address (so it knows w
 
 `recursive(1)` pauses at the line `recursive(n+1)`. A **new** frame is pushed on top. Crucially, `data` here is a **new integer** at a different address.
 
-![02](../assets/diagrams/01_04_stack_recursion_02.svg)
+![02](./diagrams/01_04_stack_recursion_02.svg)
 
 ---
 
@@ -246,7 +246,7 @@ The CPU creates a new "Stack Frame". It pushes the return address (so it knows w
 
 The Stack grows deeper. We now have three copies of `10` and three return addresses cluttering RAM.
 
-![final](../assets/diagrams/01_04_stack_recursion.svg)
+![final](./diagrams/01_04_stack_recursion.svg)
 
 ### **Questions**
 
@@ -313,7 +313,7 @@ When Process A's CPU tries to access `0x5000`:
 3. **Hit:** It points to Physical Frame #10.
 4. Data `999` is stored at Physical RAM `0x800010`.
 
-![01_05_virtual_memory](../assets/diagrams/01_05_virtual_memory.svg)
+![01_05_virtual_memory](./diagrams/01_05_virtual_memory.svg)
 
 #### **Step 3: The Context Switch**
 
@@ -394,7 +394,7 @@ int main(){
 ```
 
 ## Output:
-![output](../assets/diagrams/output_01_05_cpu_cache_false_sharing.png) 
+![output](./diagrams/output_01_05_cpu_cache_false_sharing.png) 
 
 ## Theory
 
@@ -411,7 +411,7 @@ Since Core A and core B have separate caches they must agree on the truth. A cac
 
 
 ## Memory Visualization (The Ping-Pong War)
-![01_05_cpu_cache_false_sharing](../assets/diagrams/01_06_cpu_cache_false_sharing.svg)
+![01_05_cpu_cache_false_sharing](./diagrams/01_06_cpu_cache_false_sharing.svg)
 
 **Step-by-step Ecplanation**
 1. **Load**: Core A loads the Cache line to edit health. Core B loads the line to edit armor.    
@@ -470,7 +470,7 @@ int main(){
 
 ```
 
-## ![output_01_05_cpu_cache_false_sharing_used_alignas](../assets/diagrams/output_01_05_cpu_cache_false_sharing_alignas.png)
+## ![output_01_05_cpu_cache_false_sharing_used_alignas](./diagrams/output_01_05_cpu_cache_false_sharing_alignas.png)
 
 **Why this works:** Now, health is on Cache Line X. armor is on Cache Line Y. Core A grabs Line X. Core B grabs Line Y. They never talk to each other. True Parallelism.
 
@@ -566,7 +566,7 @@ int main(){
 }
 ```
 **Output**
-![output](../assets/diagrams/image.png)
+![output](./diagrams/image.png)
 
 
 ## Theory
@@ -577,7 +577,7 @@ int main(){
 4. **Circular Wait**: A->B->A. 
 
 ## Diagram:
-![01_06_deadlock_banking](../assets/diagrams/01_07_deadlock_banking.svg)
+![01_06_deadlock_banking](./diagrams/01_07_deadlock_banking.svg)
 
 ### **Step-by-Step Visualization**
 
@@ -673,7 +673,7 @@ int main(){
 
 ---
 ## Output
-![output](../assets/diagrams/output_01_07.png)
+![output](./diagrams/output_01_07.png)
 
 ### **Key Takeaways**
 
@@ -729,7 +729,7 @@ Modern CPU runs in two different privilage levels - User mode(Ring 3) and Kernel
 
 ## Memory Visualization
 
-![diagram](../assets/diagrams/01_08_syscall_overhead.svg)
+![diagram](./diagrams/01_08_syscall_overhead.svg)
 
 ## Step-by-Step Explanation
 1. **The Call:** The Python Code calls `f.write(b"a")`
@@ -822,7 +822,7 @@ void fregmentation_scenerio(){
 
 ## Memory Visualization 
 **Swiss Cheese Heap**
-![01_09_fragmentation](../assets/diagrams/01_09_fragmentation.png)
+![01_09_fragmentation](./diagrams/01_09_fragmentation.png)
 
 ## Step by Step Visulaization
 
@@ -977,7 +977,7 @@ In `async` (FastAPI/Node.js), the **OS is NOT the boss**. The **Code is the boss
 
 ### **Memory Diagram (The Context Switch Tax)**
 
-![01_10_scheduling_tax](../assets/diagrams/01_10_scheduling_tax.png)
+![01_10_scheduling_tax](./diagrams/01_10_scheduling_tax.png)
 
 ---
 
@@ -1003,7 +1003,7 @@ In `async` (FastAPI/Node.js), the **OS is NOT the boss**. The **Code is the boss
 
 FastAPI **one thread** to handle thousands of users.
 
-![01_10_scheduling_tax_fix](../assets/diagrams/01_10_scheduling_tax_fix.png)
+![01_10_scheduling_tax_fix](./diagrams/01_10_scheduling_tax_fix.png)
 
 **How it works:**
 
@@ -1079,7 +1079,7 @@ if __name__ == "__main__":
 
 ### **Memory Diagram (The Polite Corridor)**
 
-![11_livelock_corridor](../assets/diagrams/11_livelock_corridor.png)
+![11_livelock_corridor](./diagrams/11_livelock_corridor.png)
 
 ---
 
@@ -1098,7 +1098,7 @@ if __name__ == "__main__":
 
 We replace the deterministic `time.sleep(0.1)` with a randomized wait.
 
-![11_livelock_corridor_fix](../assets/diagrams/11_livelock_corridor_fix.png)
+![11_livelock_corridor_fix](./diagrams/11_livelock_corridor_fix.png)
 
 ```python
 import time

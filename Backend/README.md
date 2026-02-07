@@ -283,3 +283,86 @@ The Header section must end with a double CRLF(\r\n\r\n). Without this, the serv
 
 For a Post request header so the server knows exactly how many bytes of the body to read, and Content-Type to define the payload format.
 ```
+
+---
+---
+---
+
+
+# 02_03_dns_lookup
+
+## Topic: *DNS - Domain Name System*
+
+## The Scenario:
+You type `google.com` in your browser. It loads instantly. You type `api.internal.delhivery.com` (a private VPN domain). It takes 10 seconds to fail.
+
+## Theory: 
+
+1. **The Hierarchy:**<br>
+    The Internet is not a single central server that knows every website. It is a tree structure.
+   - **Stub Resolver(Your PC)**: A Library inside the OS that accepts Library Call(`getaddrinfo("google.com)`) from application(browser, python). It is dumb, it doesn't know the internet. It only knows address of the Recursive Resolver.
+   - **Recursive Resolver (ISP Server)**: The worker. It receives the query from the laptop and performs recursion to find the required IP.
+   - **Root Nameserver(.):** The top of the tree. It knows where the TLD(Top Level Domain) server is.There are 13 logical Root IP addresses worldwide. 
+   - **TLD(Top Level Domain) NameServer (.org, .com)**: They knows which specific server owns `google.com`.
+   - **Authoritative NameServer**:`ns1.google.com` - It knows the actual IP database for that specific domain. 
+2. **The Protocol: UDP and Packet**
+   - **Transpot Layer(L4)**: DNS primarily used UDP port 53.
+   - **Why UDP?**
+     - **Low Overhead:** The DNS query is  often  < 512 bytes. Sending SYN, SYN-ACK, ACK(TCP) would double the latency for tiny payload
+     - **Stateless:** The server processes millions of queries per second. It doesnt want to maintain an open TCP connection per user. 
+   - **Trade-Off:** If the response is > 512 bytes the protol force switches to TCP port 53
+3. **Recursion vs Iteration**:
+    - **Recursion(Client -> ISP)**: "I need IP `google.com`" Dont come until you have the IP.
+    - **Iterative Query(ISP -> Root/TLD):** " I need the IP for `google.com` if you dont have give me who have it."
+
+
+## Visualization
+
+![02_03_dns_lookup](./diagrams/02_03_dns_lookup.png)
+
+
+
+## Step by step Explanation: 
+**You request `api.delhivery.com`**
+
+1. **Local Check**: The OS checks its Hosts File and Local DNS Cache . 
+    - **Result**: Cache Miss 
+2. **Packet creation**
+   - **L7(App)**: Construct a DNS query: `ID: 0x1A, Type: A, Name: api.delhivery.com`
+   - **L4(UDP):** 
+   - **L3(IP)** destination: ISP DNS IP(8.8.8.8)
+3. **Transmission(L1/2)** Packet leaves laptops NIC (wifi card)->Wifi Router -> Optical Fiber -> ISP Data Center.
+4. **ISP**
+   - ISP checks its RAM Cahce. Miss
+   - ISP asks Root(`.`). Root says "ask `.com` servers
+   - ISP asks `.com` TLD. TLD says ask `delhivery.com` Nameservers(hosted on AWS)
+   - ISP asks AWS. AWS says: The IP is `13.235.10.10`
+5. Caching: 
+   - The AWS servers attaches a TTL of 300 sec.
+   - THe ISP stores the `api.delhivery.com = 13.235.10.10` in RAM for 300s
+   - The Laptop stores in the OS Cache for 300s
+   - The Browser stores it in the Process Cache for 60 sec.
+
+
+## Questions: 
+Q1. If your laptop doesn't know the IP of delhivery.com, it asks the ISP DNS. If the ISP doesn't know, who does it ask next?
+- If ISP fails, it queries the `Root Nameserver`.
+
+Q2. Why is the second time you run get_ip("google.com") faster than the first? Where is the IP stored?
+-  The second request is faster because the Recursive Resolver (ISP) or the Stub Resolver (OS) cached the IP. The lookup becomes an O(1) Hash Map read in RAM insead of O(N) network traversal.
+-  
+Q3. The command line tool to manually ask a DNS server is nslookup or dig. If dig google.com works but ping google.com fails, is the problem DNS or Networking?
+- **Dig** Speaks DNS Protocol(UDP PORT 53) TESTS if the databse mapping exists.
+- **Ping** Speaks ICMP Protocol (Layer 3). Tests if the server is reachable/alive.
+- **Conclusion**: If Dig works but Ping fails DNS is healthy, but the network Fireball is blocking ICMP or the server is down.
+
+## Final Answer
+
+```
+DNS is a hierarchical, distributed database that used UDP on Port 53 for low latency resolution of hostnames to IP addresses.
+
+When a client queries a domain, the OS first checks its local Resolver Cache. On a miss, it forwards the query to a Recursive Resolver(usually ISP). This resolver traverses the hierarchy.: querying the Root Servers, theen TLD Servers and finally the Auteritative Name Server to fetch the A Record.
+
+The result is cached at every layer based on the TTL value, which minimizes network traffic for subsequent requests. Since DNS uses UDP, it prioritizes speed over reliability, handling packet loss via simple timeouts and retries at the application layer.
+
+```
